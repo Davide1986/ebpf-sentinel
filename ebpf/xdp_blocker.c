@@ -6,13 +6,16 @@
 // Gli IP da bloccare vengono inseriti nella mappa ip_blacklist
 // dallo user space (loader.c) senza ricompilare questo file.
 
+
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+
 
 // Struttura evento — aggiunto il campo "blocked"
 // rispetto alla Parte 5.
@@ -34,7 +37,7 @@ struct packet_event {
 // max_entries: numero massimo di IP bloccabili contemporaneamente
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 1024);
+    __uint(max_entries, 100000);
     __type(key, __u32);
     __type(value, __u32);
 } ip_blacklist SEC(".maps");

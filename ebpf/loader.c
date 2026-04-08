@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include <linux/if_link.h>
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "xdp_blocker.skel.h"   // skeleton del nuovo programma
