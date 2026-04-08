@@ -11,9 +11,10 @@
 #       Su altre distribuzioni potrebbe essere /usr/include/linux
 #
 # Uso:
-#   make               compila tutto
-#   make clean         rimuove i file generati
-#   make run IFACE=eth0  esegue il programma (richiede root)
+#   make                        compila tutto
+#   make clean                  rimuove i file generati
+#   make run IFACE=eth0         esegue senza bloccare nulla
+#   make run IFACE=eth0 BLOCK="8.8.8.8 1.2.3.4"  blocca IP
 
 ARCH          := $(shell uname -m)
 KERN_INCLUDES := -I/usr/include/$(ARCH)-linux-gnu
@@ -26,21 +27,25 @@ TARGET        := sentinel
 
 all: $(TARGET)
 
-xdp_inspector.o: xdp_inspector.c
+xdp_blocker.o: xdp_blocker.c
 	clang $(BPF_CFLAGS) -c $< -o $@
 
-xdp_inspector.skel.h: xdp_inspector.o
+xdp_blocker.skel.h: xdp_blocker.o
 	bpftool gen skeleton $< > $@
 
-$(TARGET): loader.c xdp_inspector.skel.h
+$(TARGET): loader.c xdp_blocker.skel.h
 	gcc $(USER_CFLAGS) -o $@ $< $(LIBS)
 
 clean:
-	rm -f xdp_inspector.o xdp_inspector.skel.h $(TARGET)
+	rm -f xdp_blocker.o xdp_blocker.skel.h $(TARGET)
 
 run: $(TARGET)
 	@if [ -z "$(IFACE)" ]; then \
 		echo "Specifica l'interfaccia: make run IFACE=eth0"; \
 		exit 1; \
 	fi
-	sudo ./$(TARGET) $(IFACE)
+	@BLOCK_ARGS=""; \
+	for ip in $(BLOCK); do \
+		BLOCK_ARGS="$$BLOCK_ARGS -b $$ip"; \
+	done; \
+	sudo ./$(TARGET) $(IFACE) $$BLOCK_ARGS
