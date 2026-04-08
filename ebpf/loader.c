@@ -30,6 +30,11 @@ void handle_signal(int sig) {
 
 void handle_event(void *ctx, int cpu, void *data, __u32 size)
 {
+    // Verifica che l'evento ricevuto abbia la dimensione attesa.
+    // Protegge da eventi corrotti o troncati.
+    if (size < sizeof(struct packet_event))
+        return;
+
     struct packet_event *evt = data;
 
     char src_str[INET_ADDRSTRLEN];
@@ -45,7 +50,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 size)
         default:           proto = "???";  break;
     }
 
-    printf("[ebpf-sentinel] %s  %s:%u  →  %s:%u\n",
+    printf("[ebpf-sentinel] %s  %s:%u  ->  %s:%u\n",
            proto, src_str, evt->src_port, dst_str, evt->dst_port);
 }
 
@@ -68,12 +73,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // bpf_program__attach_xdp è l'API moderna raccomandata da libbpf.
-    // Restituisce un bpf_link che gestisce automaticamente il ciclo
-    // di vita del programma: quando il link viene distrutto,
-    // il programma viene rimosso dall'interfaccia.
-    // Questo approccio è più robusto di bpf_xdp_attach()
-    // che richiedeva una chiamata manuale a bpf_xdp_detach().
     int ifindex = if_nametoindex(ifname);
     if (!ifindex) {
         fprintf(stderr, "Interfaccia '%s' non trovata\n", ifname);
@@ -81,9 +80,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    struct bpf_link *link = bpf_program__attach_xdp(
-                                skel->progs.xdp_inspector, ifindex);
-    if (!link) {
+    if (bpf_xdp_attach(ifindex,
+                        bpf_program__fd(skel->progs.xdp_inspector),
+                        XDP_FLAGS_SKB_MODE, NULL) < 0) {
         fprintf(stderr, "Errore nell'aggancio XDP: %s\n", strerror(errno));
         xdp_inspector__destroy(skel);
         return 1;
@@ -103,7 +102,7 @@ int main(int argc, char **argv)
 
     if (!pb) {
         fprintf(stderr, "Errore nella creazione del perf buffer\n");
-        bpf_link__destroy(link);
+        bpf_xdp_detach(ifindex, XDP_FLAGS_SKB_MODE, NULL);
         xdp_inspector__destroy(skel);
         return 1;
     }
@@ -114,9 +113,7 @@ int main(int argc, char **argv)
 
     printf("\n[ebpf-sentinel] Uscita. Rimozione programma XDP...\n");
     perf_buffer__free(pb);
-    // bpf_link__destroy rimuove automaticamente il programma
-    // dall'interfaccia — non serve bpf_xdp_detach manuale
-    bpf_link__destroy(link);
+    bpf_xdp_detach(ifindex, XDP_FLAGS_SKB_MODE, NULL);
     xdp_inspector__destroy(skel);
 
     return 0;

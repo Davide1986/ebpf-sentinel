@@ -8,7 +8,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <bpf/bpf_helpers.h>
-#include <bpf/bpf_endian.h>    // bpf_ntohs — conversione endianness lato eBPF
+#include <bpf/bpf_endian.h>
 
 struct packet_event {
     __u32 src_ip;
@@ -48,13 +48,16 @@ int xdp_inspector(struct xdp_md *ctx)
 
     __u32 ip_header_size = ip->ihl * 4;
 
+    // Controllo richiesto dal verifier eBPF: un header IP valido
+    // e' sempre almeno 20 byte. Senza questo check il verifier
+    // potrebbe rifiutare il programma su kernel piu' severi.
+    if (ip_header_size < sizeof(struct iphdr))
+        return XDP_PASS;
+
     if (ip->protocol == IPPROTO_TCP) {
         struct tcphdr *tcp = (void *)ip + ip_header_size;
         if ((void *)(tcp + 1) > data_end)
             return XDP_PASS;
-        // bpf_ntohs è la versione corretta di ntohs per programmi eBPF.
-        // Garantisce la conversione byte order su qualsiasi architettura
-        // senza dipendere dalla libc, che non è disponibile lato kernel.
         evt.src_port = bpf_ntohs(tcp->source);
         evt.dst_port = bpf_ntohs(tcp->dest);
     } else if (ip->protocol == IPPROTO_UDP) {
@@ -71,6 +74,4 @@ int xdp_inspector(struct xdp_md *ctx)
     return XDP_PASS;
 }
 
-// La licenza deve essere GPL-compatibile.
-// Il kernel Linux rifiuta programmi eBPF con licenze non compatibili.
 char _license[] SEC("license") = "GPL";
