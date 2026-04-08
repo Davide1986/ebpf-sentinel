@@ -5,72 +5,83 @@
 [![Language](https://img.shields.io/badge/language-C%20%7C%20Python-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-in%20sviluppo-yellow.svg)]()
 
-Un EDR (Endpoint Detection & Response) leggero per Linux, costruito passo dopo
-passo a scopo educativo e di ricerca.
+---
 
-Sfrutta **eBPF** per l'ispezione dei pacchetti di rete in tempo reale,
-un **memory scanner** per rilevare codice malevolo in memoria e un motore
-di **anomaly detection basato su AI** per bloccare le minacce prima che
-causino danni.
+## 🛡️ Cos'è ebpf-sentinel
+
+**ebpf-sentinel** è un EDR (Endpoint Detection & Response) leggero per Linux,
+costruito passo dopo passo a scopo educativo e di ricerca.
+
+Il progetto sfrutta:
+
+* 🔍 **eBPF** → ispezione dei pacchetti di rete in tempo reale
+* 🧠 **AI (Anomaly Detection)** → rilevamento comportamenti sospetti
+* 🧬 **Memory Scanner** → analisi della memoria per codice malevolo
+
+L’obiettivo è bloccare le minacce prima che causino danni.
 
 ---
 
-## Struttura del progetto
+## 📁 Struttura del progetto
+
+```bash
 ebpf-sentinel/
-├── ebpf/        # Programmi eBPF (kernel side) e loader libbpf (user side)
-├── ai/          # Modello di anomaly detection (Isolation Forest → ONNX)
-├── memory/      # Memory scanner: analisi di /proc/PID/maps e /proc/PID/mem
-├── agent/       # Collector: raccoglie eventi da eBPF e li passa all'AI
-├── edr/         # Core orchestratore: mette insieme tutti i moduli
-└── docs/        # Documentazione, schemi e riferimenti
+├── ebpf/        # Programmi eBPF (kernel) + loader libbpf (user)
+├── ai/          # Modello anomaly detection (Isolation Forest → ONNX)
+├── memory/      # Scanner memoria (/proc/PID/maps e /proc/PID/mem)
+├── agent/       # Collector eventi eBPF → AI
+├── edr/         # Core orchestratore
+└── docs/        # Documentazione e schemi
+```
 
 ---
 
-## Serie di articoli
+## 📚 Serie di articoli
 
-Questo progetto è costruito pubblicamente, articolo per articolo, su LinkedIn.
+Il progetto è sviluppato pubblicamente su LinkedIn.
 
-| Parte | Argomento |
-|-------|-----------|
-| 1 | Introduzione a NFQUEUE e Netfilter |
-| 2 | libnetfilter_queue: architettura e librerie |
-| 3 | Progettazione del flusso e della Callback |
-| 4 | Codice della Callback e introduzione a eBPF |
-| 5 | eBPF: primo programma XDP *(in arrivo)* |
-| 6 | eBPF + AI: anomaly detection sui pacchetti |
-| 7 | I pacchetti invisibili a eBPF: TLS, tunneling |
-| 8 | Memory scanner: /proc e pattern matching |
-| 9 | EDR completo: tutto integrato |
-
----
-
-## Requisiti minimi
-
-- Linux kernel >= 5.10
-- Clang >= 12 e libbpf
-- Python >= 3.9 (per il modulo AI)
-- 2 GB RAM (testato in macchina virtuale)
+| Parte | Argomento                                   |
+| ----: | ------------------------------------------- |
+|     1 | Introduzione a NFQUEUE e Netfilter          |
+|     2 | libnetfilter_queue: architettura e librerie |
+|     3 | Progettazione del flusso e della callback   |
+|     4 | Codice della callback + introduzione a eBPF |
+|     5 | eBPF: primo programma XDP *(in arrivo)*     |
+|     6 | eBPF + AI: anomaly detection sui pacchetti  |
+|     7 | Limiti eBPF: TLS e tunneling                |
+|     8 | Memory scanner: `/proc` e pattern matching  |
+|     9 | EDR completo: integrazione finale           |
 
 ---
 
-## Come contribuire
+## ⚙️ Requisiti
 
-Il progetto è aperto a contributi di ogni tipo: correzioni, miglioramenti
-al codice, traduzione della documentazione, test su distribuzioni diverse.
-
-Apri una **Issue** per segnalare un problema o proporre un'idea,
-oppure invia una **Pull Request** direttamente.
+* 🐧 Linux kernel **>= 5.10**
+* 🛠️ Clang **>= 12** + libbpf
+* 🐍 Python **>= 3.9**
+* 💾 RAM: minimo **2 GB** (testato in VM)
 
 ---
 
-## Autore
+## 🤝 Come contribuire
+
+Contributi benvenuti!
+
+* 🐛 Segnala bug aprendo una **Issue**
+* 💡 Proponi miglioramenti
+* 🔧 Invia una **Pull Request**
+* 🌍 Aiuta con traduzioni o test
+
+---
+
+## 👨‍💻 Autore
 
 **Davide De Rubeis**
-Sistemista e Amministratore Reti — Istituto CEFI
-Laureato in Ingegneria Informatica — Università degli Studi di Roma Tre
+Sistemista & Amministratore di Rete — Istituto CEFI
+Laureato in Ingegneria Informatica — Università Roma Tre
 
 ---
 
-## Licenza
+## 📄 Licenza
 
 Distribuito sotto licenza [MIT](LICENSE).
