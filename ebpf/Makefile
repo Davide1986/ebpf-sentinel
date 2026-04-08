@@ -2,10 +2,17 @@
 # SPDX-License-Identifier: MIT
 # Davide De Rubeis — ebpf-sentinel
 #
+# REQUISITI:
+#   sudo apt install clang llvm libbpf-dev bpftool linux-headers-$(uname -r)
+#
+# Testato su: Ubuntu 22.04, Debian 12, kernel >= 5.10
+# Nota: su architetture o kernel diversi potrebbe essere necessario
+# generare vmlinux.h da BTF. Vedere docs/ per istruzioni.
+#
 # Uso:
 #   make          → compila tutto
 #   make clean    → rimuove i file generati
-#   make run      → esegue il programma (richiede root e IFACE=eth0)
+#   make run IFACE=eth0 → esegue il programma
 
 # Rileva automaticamente l'architettura della macchina
 ARCH := $(shell uname -m)

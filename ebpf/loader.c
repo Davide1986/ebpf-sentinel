@@ -1,7 +1,6 @@
 // ebpf/loader.c
 // SPDX-License-Identifier: MIT
 // Davide De Rubeis — ebpf-sentinel
-// Loader: carica il programma XDP nel kernel e legge gli eventi.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,12 +8,12 @@
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
-#include <arpa/inet.h>          // inet_ntop
-#include <bpf/libbpf.h>         // API libbpf
+#include <net/if.h>
+#include <arpa/inet.h>
+#include <bpf/libbpf.h>
 #include <bpf/bpf.h>
-#include "xdp_inspector.skel.h" // Generato automaticamente da libbpf
+#include "xdp_inspector.skel.h"
 
-// Struttura evento — deve essere identica a quella in xdp_inspector.c
 struct packet_event {
     __u32 src_ip;
     __u32 dst_ip;
@@ -23,27 +22,21 @@ struct packet_event {
     __u8  protocol;
 };
 
-// Flag per gestire l'uscita pulita con Ctrl+C
 static volatile int running = 1;
 
 void handle_signal(int sig) {
     running = 0;
 }
 
-// Questa funzione viene chiamata da libbpf ogni volta che
-// arriva un evento dalla mappa perf. È il nostro punto
-// di ingresso per analizzare i pacchetti lato user space.
 void handle_event(void *ctx, int cpu, void *data, __u32 size)
 {
     struct packet_event *evt = data;
 
-    // Convertiamo gli indirizzi IP in stringhe leggibili
     char src_str[INET_ADDRSTRLEN];
     char dst_str[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &evt->src_ip, src_str, sizeof(src_str));
     inet_ntop(AF_INET, &evt->dst_ip, dst_str, sizeof(dst_str));
 
-    // Determiniamo il nome del protocollo
     const char *proto;
     switch (evt->protocol) {
         case IPPROTO_TCP:  proto = "TCP";  break;
@@ -66,22 +59,21 @@ int main(int argc, char **argv)
 
     const char *ifname = argv[1];
 
-    // Registriamo il gestore per Ctrl+C
     signal(SIGINT,  handle_signal);
     signal(SIGTERM, handle_signal);
 
-    // ── Step 1: Carica il programma eBPF ─────────────────────────────
-    // xdp_inspector__open_and_load() è generata automaticamente
-    // dallo skeleton libbpf a partire dal nostro .c kernel.
-    // Si occupa di aprire il file oggetto, verificarlo e caricarlo.
     struct xdp_inspector *skel = xdp_inspector__open_and_load();
     if (!skel) {
         fprintf(stderr, "Errore nel caricamento del programma eBPF\n");
         return 1;
     }
 
-    // ── Step 2: Aggancia il programma all'interfaccia ─────────────────
-    // Otteniamo l'indice dell'interfaccia di rete specificata
+    // bpf_program__attach_xdp è l'API moderna raccomandata da libbpf.
+    // Restituisce un bpf_link che gestisce automaticamente il ciclo
+    // di vita del programma: quando il link viene distrutto,
+    // il programma viene rimosso dall'interfaccia.
+    // Questo approccio è più robusto di bpf_xdp_attach()
+    // che richiedeva una chiamata manuale a bpf_xdp_detach().
     int ifindex = if_nametoindex(ifname);
     if (!ifindex) {
         fprintf(stderr, "Interfaccia '%s' non trovata\n", ifname);
@@ -89,14 +81,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Colleghiamo il programma XDP all'interfaccia.
-    // XDP_FLAGS_SKB_MODE è la modalità compatibile con tutte
-    // le schede di rete, incluse quelle virtualizzate.
-    // Nelle prossime parti vedremo anche XDP_FLAGS_DRV_MODE,
-    // la modalità nativa che offre prestazioni ancora migliori.
-    if (bpf_xdp_attach(ifindex,
-                        bpf_program__fd(skel->progs.xdp_inspector),
-                        XDP_FLAGS_SKB_MODE, NULL) < 0) {
+    struct bpf_link *link = bpf_program__attach_xdp(
+                                skel->progs.xdp_inspector, ifindex);
+    if (!link) {
         fprintf(stderr, "Errore nell'aggancio XDP: %s\n", strerror(errno));
         xdp_inspector__destroy(skel);
         return 1;
@@ -105,35 +92,31 @@ int main(int argc, char **argv)
     printf("[ebpf-sentinel] In ascolto su '%s'. Premi Ctrl+C per uscire.\n\n",
            ifname);
 
-    // ── Step 3: Leggi gli eventi in loop ─────────────────────────────
-    // perf_buffer__new crea un buffer per leggere gli eventi
-    // dalla mappa perf in modo efficiente.
     struct perf_buffer *pb = perf_buffer__new(
         bpf_map__fd(skel->maps.packet_events),
-        8,            // Numero di pagine per CPU
-        handle_event, // Funzione chiamata per ogni evento
-        NULL,         // Funzione per eventi persi (opzionale)
+        8,
+        handle_event,
+        NULL,
         NULL,
         NULL
     );
 
     if (!pb) {
         fprintf(stderr, "Errore nella creazione del perf buffer\n");
-        bpf_xdp_detach(ifindex, XDP_FLAGS_SKB_MODE, NULL);
+        bpf_link__destroy(link);
         xdp_inspector__destroy(skel);
         return 1;
     }
 
     while (running) {
-        // perf_buffer__poll attende eventi per 100ms.
-        // Se arrivano eventi, chiama handle_event per ognuno.
         perf_buffer__poll(pb, 100);
     }
 
-    // ── Pulizia ───────────────────────────────────────────────────────
     printf("\n[ebpf-sentinel] Uscita. Rimozione programma XDP...\n");
     perf_buffer__free(pb);
-    bpf_xdp_detach(ifindex, XDP_FLAGS_SKB_MODE, NULL);
+    // bpf_link__destroy rimuove automaticamente il programma
+    // dall'interfaccia — non serve bpf_xdp_detach manuale
+    bpf_link__destroy(link);
     xdp_inspector__destroy(skel);
 
     return 0;
