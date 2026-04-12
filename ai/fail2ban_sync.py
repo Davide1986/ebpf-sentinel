@@ -23,7 +23,7 @@ import socket
 import ipaddress
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ──────────────────────────────────────────────
 # Configurazione / Configuration
@@ -201,7 +201,7 @@ def log_to_sentinel_db(ip: str):
     which IPs were blocked by fail2ban vs feeds.
     """
     try:
-        now = datetime.now(datetime.UTC).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         conn = sqlite3.connect(SENTINEL_DB)
         row = conn.execute(
             "SELECT score, sources FROM ip_scores WHERE ip = ?",
@@ -233,11 +233,60 @@ def log_to_sentinel_db(ip: str):
     except Exception as e:
         print(f"[f2b-sync] Errore log sentinel DB: {e}")
 
+def map_remove(map_id: int, ip: str) -> bool:
+    """
+    Rimuove un IP dalla mappa eBPF.
+    Removes an IP from the eBPF map.
+    """
+    key_hex = " ".join(f"{b:02x}" for b in ip_to_hex(ip))
+    try:
+        r = subprocess.run(
+            ["bpftool", "map", "delete",
+             "id", str(map_id),
+             "key", "hex"] + key_hex.split(),
+            capture_output=True,
+            text=True,
+            timeout=BPFTOOL_TIMEOUT
+        )
+        if r.returncode != 0:
+            print(f"[f2b-sync] map_remove fallito per {ip}: "
+                  f"{r.stderr.strip()}")
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        print(f"[f2b-sync] map_remove timeout per {ip}")
+        return False
+    except Exception as e:
+        print(f"[f2b-sync] Eccezione map_remove {ip}: {e}")
+        return False
+
+
+def remove_from_sentinel_db(ip: str):
+    """
+    Rimuove o aggiorna il record dell'IP nel DB sentinel
+    quando fail2ban lo ha liberato.
+    Removes or updates the IP record in sentinel DB
+    when fail2ban has unbanned it.
+
+    Non cancelliamo il record — abbattiamo solo il flag
+    blocked per mantenere la storia dell'IP.
+    We do not delete the record — we only clear the
+    blocked flag to keep the IP history.
+    """
+    try:
+        conn = sqlite3.connect(SENTINEL_DB)
+        conn.execute(
+            "UPDATE ip_scores SET blocked = 0 WHERE ip = ?",
+            (ip,)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[f2b-sync] Errore update sentinel DB: {e}")
 
 # ──────────────────────────────────────────────
 # Main loop
 # ──────────────────────────────────────────────
-
 def main():
     print("[f2b-sync] ebpf-sentinel — Fail2ban sync")
     print(f"[f2b-sync] Fail2ban DB: {FAIL2BAN_DB}")
@@ -245,12 +294,11 @@ def main():
     print(f"[f2b-sync] Score assegnato: {SCORE}")
     print(f"[f2b-sync] Intervallo: {SYNC_INTERVAL}s\n")
 
-    # Tiene traccia degli IP già sincronizzati
-    # in questa sessione per evitare chiamate
-    # bpftool ripetute inutili.
-    # Tracks IPs already synced in this session
-    # to avoid unnecessary repeated bpftool calls.
-    already_synced = set()
+    # Tiene traccia degli IP sincronizzati in questa sessione.
+    # Tracks IPs synced in this session.
+    # Usiamo un set mutabile per aggiungere e rimuovere.
+    # We use a mutable set to add and remove.
+    synced = set()
 
     try:
         while True:
@@ -261,31 +309,45 @@ def main():
                 time.sleep(30)
                 continue
 
-            banned = get_banned_ips()
-            nuovi = [ip for ip in banned
-                     if ip not in already_synced]
+            # IP attualmente bannati da fail2ban
+            # IPs currently banned by fail2ban
+            banned_now = set(get_banned_ips())
 
-            if nuovi:
-                print(f"[f2b-sync] {len(nuovi)} nuovi IP "
-                      f"da sincronizzare")
-                sincronizzati = 0
-                for ip in nuovi:
+            # IP da aggiungere — nuovi ban di fail2ban
+            # IPs to add — new fail2ban bans
+            da_aggiungere = banned_now - synced
+
+            # IP da rimuovere — fail2ban li ha liberati
+            # IPs to remove — fail2ban has unbanned them
+            da_rimuovere = synced - banned_now
+
+            # Aggiunge i nuovi IP alla mappa XDP
+            # Adds new IPs to the XDP map
+            if da_aggiungere:
+                print(f"[f2b-sync] Nuovi ban da sincronizzare: "
+                      f"{len(da_aggiungere)}")
+                for ip in da_aggiungere:
                     if map_add(map_id, ip):
                         log_to_sentinel_db(ip)
-                        already_synced.add(ip)
-                        sincronizzati += 1
-                        print(f"[f2b-sync] Bloccato a livello XDP: "
-                              f"{ip}")
-                print(f"[f2b-sync] Sincronizzati: {sincronizzati}")
-            else:
-                print(f"[f2b-sync] Nessun nuovo ban — "
-                      f"totale attivi: {len(banned)}")
+                        synced.add(ip)
+                        print(f"[f2b-sync] + Bloccato XDP: {ip}")
+
+            # Rimuove gli IP che fail2ban ha liberato
+            # Removes IPs that fail2ban has unbanned
+            if da_rimuovere:
+                print(f"[f2b-sync] IP liberati da fail2ban: "
+                      f"{len(da_rimuovere)}")
+                for ip in da_rimuovere:
+                    if map_remove(map_id, ip):
+                        remove_from_sentinel_db(ip)
+                        synced.discard(ip)
+                        print(f"[f2b-sync] - Rimosso XDP: {ip}")
+
+            if not da_aggiungere and not da_rimuovere:
+                print(f"[f2b-sync] Nessuna modifica — "
+                      f"ban attivi: {len(banned_now)}")
 
             time.sleep(SYNC_INTERVAL)
 
     except KeyboardInterrupt:
         print("\n[f2b-sync] Interrotto dall'utente.")
-
-
-if __name__ == "__main__":
-    main()
