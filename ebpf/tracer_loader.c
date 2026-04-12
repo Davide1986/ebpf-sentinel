@@ -57,13 +57,13 @@ int main(void)
     printf("[tracer] In ascolto sulle chiamate connect(). "
            "Premi Ctrl+C per uscire.\n\n");
 
-    struct perf_buffer_opts pb_opts = {
-        .sample_cb = handle_event,
-    };
     struct perf_buffer *pb = perf_buffer__new(
         bpf_map__fd(skel->maps.syscall_events),
         8,
-        &pb_opts
+        handle_event,
+        NULL,
+        NULL,
+        NULL
     );
 
     if (!pb) {
