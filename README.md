@@ -47,7 +47,7 @@ Il progetto è sviluppato pubblicamente su LinkedIn.
 | 3 | [Progettazione del flusso e della callback](https://linkedin.com/pulse/kernel-linux-realizziamo-assieme-un-validatore-di-rete-de-rubeis-2f) |
 | 4 | [Codice della callback + introduzione a eBPF](https://www.linkedin.com/pulse/kernel-linux-realizziamo-assieme-un-validatore-di-rete-de-rubeis-3f/) |
 | 5 | [eBPF: primo programma XDP](https://www.linkedin.com/pulse/kernel-linux-realizziamo-assieme-un-validatore-di-rete-de-rubeis-qxvhf/) |
-| 6 | eBPF + AI: anomaly detection sui pacchetti |
+| 6 | [eBPF + AI: anomaly detection sui pacchetti](https://www.linkedin.com/pulse/kernel-linux-realizziamo-assieme-un-validatore-di-rete-de-rubeis-wg3df/) |
 | 7 | Limiti eBPF: TLS e tunneling |
 | 8 | Memory scanner: `/proc` e pattern matching |
 | 9 | EDR completo: integrazione finale |
