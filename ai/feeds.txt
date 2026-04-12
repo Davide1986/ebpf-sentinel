@@ -1,0 +1,31 @@
+# ebpf-sentinel — feed di threat intelligence
+# threat intelligence feeds
+#
+# Formato / Format: url|peso|nome
+# Peso / Weight: 1-5 (5 = massima affidabilità / highest reliability)
+# Commenta una riga con # per disabilitare un feed
+# Comment a line with # to disable a feed
+#
+# ──────────────────────────────────────────────
+# Feed core — alta affidabilità / high reliability
+# ──────────────────────────────────────────────
+https://feodotracker.abuse.ch/downloads/ipblocklist.txt|5|feodo
+https://sslbl.abuse.ch/blacklist/sslipblacklist.txt|4|sslbl
+https://www.spamhaus.org/drop/drop.txt|5|spamhaus_drop
+https://www.spamhaus.org/drop/edrop.txt|5|spamhaus_edrop
+https://rules.emergingthreats.net/blockrules/compromised-ips.txt|4|emerging_threats
+
+# ──────────────────────────────────────────────
+# Feed secondari — buona affidabilità / good reliability
+# ──────────────────────────────────────────────
+https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset|3|firehol_l1
+https://www.binarydefense.com/banlist.txt|3|binary_defense
+https://lists.blocklist.de/lists/all.txt|2|blocklist_de
+
+# ──────────────────────────────────────────────
+# Feed rumorosi — usa con cautela / use with caution
+# Decommentare solo se accetti falsi positivi
+# Uncomment only if you accept false positives
+# ──────────────────────────────────────────────
+# https://cinsscore.com/list/ci-badguys.txt|2|cinsscore
+# https://reputation.alienvault.com/reputation.data|2|alienvault
