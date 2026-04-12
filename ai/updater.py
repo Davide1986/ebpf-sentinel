@@ -185,7 +185,7 @@ def update_score(conn: sqlite3.Connection,
     If the source is already present for this cycle
     the weight is not added twice.
     """
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(datetime.UTC).isoformat()
     row = conn.execute(
         "SELECT score, sources, source_count FROM ip_scores WHERE ip = ?",
         (ip,)
@@ -252,7 +252,7 @@ def get_ips_to_expire(conn: sqlite3.Connection) -> list:
     the current threshold.
     """
     cutoff = (
-        datetime.utcnow() - timedelta(hours=TTL_HOURS)
+        datetime.now(datetime.UTC) - timedelta(hours=TTL_HOURS)
     ).isoformat()
     rows = conn.execute(
         """SELECT ip FROM ip_scores
@@ -483,7 +483,7 @@ def main():
 
             print(f"[updater] Mappa trovata — ID: {map_id}")
             print(f"[updater] Ciclo: "
-                  f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+                  f"{datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC')}")
 
             # Carica feed dal file / Load feeds from file
             feeds = load_feeds(FEEDS_FILE)
